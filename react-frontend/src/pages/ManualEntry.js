@@ -13,75 +13,64 @@ function ManualReceipt() {
   useEffect(() => {
     axios.get('http://localhost:8080/api/products')
       .then(res => setAllProducts(res.data))
-      .catch(err => console.error('Neizdevās ielādēt produktus:', err));
+      .catch(() => setMessage('❌ Neizdevās ielādēt produktus.'));
   }, []);
 
     const validateForm = () => {
-      if (!receiptNumber.trim()) {
-        setMessage('❗ Lūdzu ievadi čeka numuru!');
-        return false;
-      }
-
-      if (!date) {
-        setMessage('❗ Lūdzu izvēlies datumu!');
-        return false;
-      }
+    if (!receiptNumber.trim()) return setMessage('❗ Lūdzu ievadi čeka numuru!') || false;
+    if (!date) return setMessage('❗ Lūdzu izvēlies datumu!') || false;
 
       for (let i = 0; i < products.length; i++) {
         const p = products[i];
-        if (p.type === 'existing' && !p.productId) {
-          setMessage(`❗ Lūdzu izvēlies esošu produktu rindā ${i + 1}.`);
-          return false;
-        }
-        if (p.type === 'new' && !p.name.trim()) {
-          setMessage(`❗ Lūdzu ievadi produkta nosaukumu rindā ${i + 1}.`);
-          return false;
-        }
-        if (p.unitPrice <= 0 || isNaN(p.unitPrice)) {
-          setMessage(`❗ Produkta cena nevar būt 0 vai tukša (rinda ${i + 1}).`);
-          return false;
-        }
-        if (p.quantity <= 0 || isNaN(p.quantity)) {
-          setMessage(`❗ Produkta daudzums nevar būt 0 vai tukšs (rinda ${i + 1}).`);
-          return false;
-        }
+      if (p.type === 'existing' && !p.productId)
+        return setMessage(`❗ Izvēlies esošu produktu rindā ${i + 1}.`) || false;
+      if (p.type === 'new' && !p.name.trim())
+        return setMessage(`❗ Ievadi produkta nosaukumu rindā ${i + 1}.`) || false;
+      if (p.unitPrice <= 0 || isNaN(p.unitPrice))
+        return setMessage(`❗ Cena nevar būt 0 vai tukša (rinda ${i + 1}).`) || false;
+      if (p.quantity <= 0 || isNaN(p.quantity))
+        return setMessage(`❗ Daudzums nevar būt 0 vai tukšs (rinda ${i + 1}).`) || false;
       }
 
       return true;
     };
 
-  const addProduct = () => {
-    setProducts([...products, { type: 'existing', productId: '', name: '', unitPrice: 0, quantity: 1 }]);
-  };
-
-  const toggleProductType = (index) => {
-    const updated = [...products];
-    updated[index].type = updated[index].type === 'existing' ? 'new' : 'existing';
-    updated[index].productId = '';
-    updated[index].name = '';
-    updated[index].unitPrice = 0;
-    setProducts(updated);
-  };
-
   const handleProductChange = (index, field, value) => {
     const updated = [...products];
     if (field === 'productId') {
       const selected = allProducts.find(p => p.id === parseInt(value));
-      updated[index].productId = selected?.id;
-      updated[index].unitPrice = selected?.unitPrice;
-      updated[index].name = selected?.name;
+      updated[index] = {
+        ...updated[index],
+        productId: selected?.id || '',
+        unitPrice: selected?.unitPrice || 0,
+        name: selected?.name || ''
+      };
     } else {
       updated[index][field] = field === 'name' ? value : parseFloat(value);
     }
     setProducts(updated);
   };
 
-  const calculateTotal = () => {
-    return products.reduce((sum, p) => sum + p.unitPrice * p.quantity, 0).toFixed(2);
+  const addProduct = () =>
+    setProducts([...products, { type: 'existing', productId: '', name: '', unitPrice: 0, quantity: 1 }]);
+
+  const toggleProductType = index => {
+    const updated = [...products];
+    updated[index] = {
+      type: updated[index].type === 'existing' ? 'new' : 'existing',
+      productId: '',
+      name: '',
+      unitPrice: 0,
+      quantity: 1
+  };
+    setProducts(updated);
   };
 
+  const calculateTotal = () =>
+    products.reduce((sum, p) => sum + p.unitPrice * p.quantity, 0).toFixed(2);
+
     const handleSubmit = async () => {
-      if (!validateForm()) return; // ✅ Izsauc validāciju
+    if (!validateForm()) return;
 
       const data = {
         receiptNumber,
@@ -99,9 +88,8 @@ function ManualReceipt() {
       try {
         await axios.post('http://localhost:8080/api/receipts/manual', data);
         setMessage('✅ Čeks saglabāts veiksmīgi!');
-      } catch (error) {
+    } catch (err) {
         setMessage('❌ Kļūda saglabājot čeku.');
-        console.error(error);
       }
     };
 
@@ -110,24 +98,20 @@ function ManualReceipt() {
       <h1 className="text-2xl font-bold mb-4">Manuāla čeka izveide</h1>
 
       <label>Čeka Nr:</label>
-      <input type="text" value={receiptNumber} onChange={(e) => setReceiptNumber(e.target.value)} className="block border p-2 mb-2" />
+      <input value={receiptNumber} onChange={e => setReceiptNumber(e.target.value)} className="block border p-2 mb-2" />
 
       <label>Datums:</label>
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="block border p-2 mb-4" />
+      <input type="date" value={date} onChange={e => setDate(e.target.value)} className="block border p-2 mb-4" />
 
       <h2 className="text-lg font-semibold mb-2">Produkti</h2>
       {products.map((p, idx) => (
-        <div key={idx} className="mb-4 border rounded p-4 space-y-2 bg-gray-50">
+        <div key={idx} className="mb-4 border rounded p-4 bg-gray-50">
           <button onClick={() => toggleProductType(idx)} className="text-blue-600 text-sm underline">
             {p.type === 'existing' ? '👉 Pievienot jaunu produktu' : '🔄 Izvēlēties esošu produktu'}
           </button>
 
           {p.type === 'existing' ? (
-            <select
-              value={p.productId}
-              onChange={(e) => handleProductChange(idx, 'productId', e.target.value)}
-              className="border p-2 w-full"
-            >
+            <select value={p.productId} onChange={e => handleProductChange(idx, 'productId', e.target.value)} className="border p-2 w-full">
               <option value="">-- Izvēlies produktu --</option>
               {allProducts.map(prod => (
                 <option key={prod.id} value={prod.id}>
@@ -141,14 +125,14 @@ function ManualReceipt() {
                 type="text"
                 placeholder="Nosaukums"
                 value={p.name}
-                onChange={(e) => handleProductChange(idx, 'name', e.target.value)}
+                onChange={e => handleProductChange(idx, 'name', e.target.value)}
                 className="border p-2 w-full"
               />
               <input
                 type="number"
                 placeholder="Cena"
                 value={p.unitPrice}
-                onChange={(e) => handleProductChange(idx, 'unitPrice', e.target.value)}
+                onChange={e => handleProductChange(idx, 'unitPrice', e.target.value)}
                 className="border p-2 w-full"
               />
             </>
@@ -158,7 +142,7 @@ function ManualReceipt() {
             type="number"
             placeholder="Daudzums"
             value={p.quantity}
-            onChange={(e) => handleProductChange(idx, 'quantity', e.target.value)}
+            onChange={e => handleProductChange(idx, 'quantity', e.target.value)}
             className="border p-2 w-full"
           />
 

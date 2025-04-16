@@ -98,9 +98,14 @@ public class PDFParserUtil {
                     }
                 }
 
-                Product product = new Product(name, unitPrice, quantity);
-                product.setTotalPrice(totalPrice);
-                product.setDiscountAmount(discountAmount);
+                Product product = Product.builder()
+                        .name(name)
+                        .unitPrice(unitPrice)
+                        .quantity(quantity)
+                        .totalPrice(totalPrice)
+                        .discountAmount(discountAmount)
+                        .build();
+
                 products.add(product);
             }
 

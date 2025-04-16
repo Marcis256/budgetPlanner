@@ -4,9 +4,7 @@ import com.example.budzets.dto.CheckProductDTO;
 import com.example.budzets.dto.ReceiptDTO;
 import com.example.budzets.model.CheckProductEntity;
 import com.example.budzets.model.ProductEntity;
-import com.example.budzets.model.Receipt;
 import com.example.budzets.model.ReceiptEntity;
-import com.example.budzets.repository.CategoryRepository;
 import com.example.budzets.repository.ProductRepository;
 import com.example.budzets.repository.ReceiptRepository;
 import com.example.budzets.service.ReceiptService;
@@ -42,22 +40,14 @@ public class ReceiptController {
     @PostMapping("/upload")
     public ResponseEntity<?> upload(@RequestParam("file") MultipartFile file) {
         try {
-            String originalFilename = file.getOriginalFilename();
-            String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-            File tempFile = File.createTempFile("receipt-", extension);
-
+            File tempFile = File.createTempFile("receipt-", getFileExtension(file.getOriginalFilename()));
             file.transferTo(tempFile);
-
             ReceiptEntity saved = receiptService.handle(tempFile);
             return ResponseEntity.ok(saved);
-
         } catch (IllegalArgumentException e) {
-            // ✅ Ja čeks jau eksistē — neatļaujam dublikātu
             return ResponseEntity.status(HttpStatus.CONFLICT).body("⚠️ " + e.getMessage());
-
         } catch (TesseractException e) {
             return ResponseEntity.badRequest().body("❌ Neizdevās nolasīt attēlu: " + e.getMessage());
-
         } catch (IOException e) {
             return ResponseEntity.internalServerError().body("❌ Faila apstrādes kļūda: " + e.getMessage());
         }
@@ -76,22 +66,20 @@ public class ReceiptController {
     @GetMapping("/filter")
     public List<ReceiptEntity> filterByDate(
             @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end
-    ) {
+            @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
         return receiptRepository.findByDateBetween(start, end, Sort.by(Sort.Direction.DESC, "date"));
     }
 
     @GetMapping("/total/filter")
     public Double totalByDate(
             @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end
-    ) {
+            @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
         return receiptService.getTotalSpentBetween(start, end);
     }
 
     @PostMapping("/import-folder")
     public ResponseEntity<String> importReceiptsFromFolder() {
-        File folder = new File("scripts/receipts"); // ceļš relatīvs pret projekta root
+        File folder = new File("scripts/receipts");
         File[] files = folder.listFiles((dir, name) -> name.toLowerCase().endsWith(".pdf"));
 
         if (files == null || files.length == 0) {
@@ -108,7 +96,6 @@ public class ReceiptController {
                 e.printStackTrace();
             }
         }
-
         return ResponseEntity.ok("Importēti " + importedCount + " faili.");
     }
 
@@ -119,27 +106,23 @@ public class ReceiptController {
         receipt.setDate(dto.getDate());
         receipt.setTotal(dto.getTotal());
 
-        List<CheckProductEntity> checkProducts = new ArrayList<>();
-        for (CheckProductDTO cp : dto.getProducts()) {
-            ProductEntity product;
+        List<CheckProductEntity> checkProducts = dto.getProducts().stream().map(cp -> {
+            ProductEntity product = cp.getProductId() != null
+                    ? productRepository.findById(cp.getProductId())
+                    .orElseThrow(() -> new RuntimeException("Produkts nav atrasts: ID = " + cp.getProductId()))
+                    : productRepository.save(ProductEntity.builder()
+                    .name(cp.getName())
+                    .unitPrice(cp.getUnitPrice())
+                    .build());
 
-            if (cp.getProductId() != null) {
-                product = productRepository.findById(cp.getProductId())
-                        .orElseThrow(() -> new RuntimeException("Produkts nav atrasts"));
-            } else {
-                product = new ProductEntity();
-                product.setName(cp.getName());
-                product.setUnitPrice(cp.getUnitPrice());
-                product = productRepository.save(product);
-            }
-
-            CheckProductEntity checkProduct = new CheckProductEntity();
-            checkProduct.setProduct(product);
-            checkProduct.setQuantity(cp.getQuantity());
-            checkProduct.setTotalPrice(cp.getTotalPrice());
-            checkProduct.setReceipt(receipt);
-            checkProducts.add(checkProduct);
-        }
+            return CheckProductEntity.builder()
+                    .product(product)
+                    .quantity(cp.getQuantity())
+                    .totalPrice(cp.getTotalPrice())
+                    .discountAmount(cp.getDiscountAmount())
+                    .receipt(receipt)
+                    .build();
+        }).toList();
 
         receipt.setProducts(checkProducts);
         return receiptRepository.save(receipt);
@@ -161,33 +144,32 @@ public class ReceiptController {
             existing.setDate(dto.getDate());
             existing.setTotal(dto.getTotal());
 
-            // Izdzēš vecos produktus
-            existing.getProducts().clear();
-
             List<CheckProductEntity> newProducts = new ArrayList<>();
             for (CheckProductDTO cp : dto.getProducts()) {
-                ProductEntity product;
-
-                if (cp.getProductId() != null) {
-                    product = productRepository.findById(cp.getProductId())
-                            .orElseThrow(() -> new RuntimeException("Produkts nav atrasts"));
-                } else {
-                    product = new ProductEntity();
-                    product.setName(cp.getName());
-                    product.setUnitPrice(cp.getUnitPrice());
-                    product = productRepository.save(product);
-                }
+                ProductEntity product = cp.getProductId() != null
+                        ? productRepository.findById(cp.getProductId()).orElseThrow(() -> new RuntimeException("Produkts nav atrasts"))
+                        : productRepository.save(ProductEntity.builder()
+                        .name(cp.getName())
+                        .unitPrice(cp.getUnitPrice())
+                        .build());
 
                 CheckProductEntity checkProduct = new CheckProductEntity();
                 checkProduct.setProduct(product);
                 checkProduct.setQuantity(cp.getQuantity());
                 checkProduct.setTotalPrice(cp.getTotalPrice());
+                checkProduct.setDiscountAmount(cp.getDiscountAmount());
                 checkProduct.setReceipt(existing);
+
                 newProducts.add(checkProduct);
             }
 
+            existing.getProducts().clear();
             existing.setProducts(newProducts);
             return ResponseEntity.ok(receiptRepository.save(existing));
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    private String getFileExtension(String filename) {
+        return filename.substring(filename.lastIndexOf("."));
     }
 }

@@ -34,7 +34,7 @@ async function downloadMaximaReceipts(email, password) {
   await page.waitForTimeout(3000);
 
   await page.fill('#date-start', '01.01.2025');
-  await page.fill('#date-end', '14.04.2025');
+  await page.fill('#date-end', '16.04.2025');
   await page.click('text=Filtrēt');
 
   console.log("🔍 Meklējam PDF pogas un info pa rindiņām...");
@@ -70,4 +70,4 @@ async function downloadMaximaReceipts(email, password) {
   await browser.close();
 }
 
-downloadMaximaReceipts('user', 'password');
+downloadMaximaReceipts('user', 'pw');

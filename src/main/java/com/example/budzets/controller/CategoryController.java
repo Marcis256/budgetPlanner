@@ -1,32 +1,24 @@
 package com.example.budzets.controller;
 
-import com.example.budzets.dto.ProductWithTotalDTO;
-import com.example.budzets.repository.CategoryRepository;
+import com.example.budzets.dto.CategoryDTO;
 import com.example.budzets.model.CategoryEntity;
-import com.example.budzets.service.StatsService;
-import org.springframework.format.annotation.DateTimeFormat;
+import com.example.budzets.repository.CategoryRepository;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.CollectionUtils;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/categories")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = "http://localhost:3000") // var aizvietot ar * vai konfigurēt properties
 public class CategoryController {
 
     private final CategoryRepository categoryRepository;
-    private final StatsService statsService;
 
-    public CategoryController(CategoryRepository categoryRepository, StatsService statsService) {
+    public CategoryController(CategoryRepository categoryRepository) {
         this.categoryRepository = categoryRepository;
-        this.statsService = statsService;
-    }
-
-    @PostMapping
-    public CategoryEntity createCategory(@RequestBody CategoryEntity category) {
-        return categoryRepository.save(category);
     }
 
     @GetMapping
@@ -34,37 +26,29 @@ public class CategoryController {
         return categoryRepository.findAll();
     }
 
-    @GetMapping("/products")
-    public List<ProductWithTotalDTO> getProductsByCategoryAndDate(
-            @RequestParam("category") String category,
-            @RequestParam("start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam("end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end
-    ) {
-        return statsService.getProductsByCategoryAndDate(category, start, end);
-    }
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteCategory(@PathVariable Long id) {
-        CategoryEntity category = categoryRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Kategorija nav atrasta"));
-
-        if (category.getProducts() != null && !category.getProducts().isEmpty()) {
-            return ResponseEntity
-                    .badRequest()
-                    .body("Nevar dzēst kategoriju, kurai pievienoti produkti.");
-        }
-
-        categoryRepository.deleteById(id);
-        return ResponseEntity.ok("Kategorija veiksmīgi dzēsta.");
+    @PostMapping
+    public CategoryEntity create(@Valid @RequestBody CategoryDTO dto) {
+        CategoryEntity category = new CategoryEntity();
+        category.setName(dto.getName());
+        return categoryRepository.save(category);
     }
 
     @PutMapping("/{id}")
-    public CategoryEntity updateCategory(@PathVariable Long id, @RequestBody CategoryEntity updatedCategory) {
-        return categoryRepository.findById(id)
-                .map(category -> {
-                    category.setName(updatedCategory.getName());
-                    return categoryRepository.save(category);
-                })
-                .orElseThrow(() -> new IllegalArgumentException("Kategorija nav atrasta ar ID: " + id));
+    public ResponseEntity<?> update(@PathVariable Long id, @Valid @RequestBody CategoryDTO dto) {
+        return categoryRepository.findById(id).map(category -> {
+            category.setName(dto.getName());
+            return ResponseEntity.ok(categoryRepository.save(category));
+        }).orElse(ResponseEntity.notFound().build());
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> delete(@PathVariable Long id) {
+        return categoryRepository.findById(id).map(category -> {
+            if (!CollectionUtils.isEmpty(category.getProducts())) {
+                return ResponseEntity.badRequest().body("❌ Nevar dzēst kategoriju, kurai piesaistīti produkti.");
+            }
+            categoryRepository.deleteById(id);
+            return ResponseEntity.ok("✅ Kategorija veiksmīgi dzēsta.");
+        }).orElse(ResponseEntity.notFound().build());
+    }
 }

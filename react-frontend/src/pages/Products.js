@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 
 function Products() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [selected, setSelected] = useState({}); // productId -> categoryId
-  const [saving, setSaving] = useState({}); // productId -> true/false
+  const [selected, setSelected] = useState({});
+  const [saving, setSaving] = useState({});
 const [filterCategoryId, setFilterCategoryId] = useState('');
 
   useEffect(() => {
@@ -13,75 +13,56 @@ const [filterCategoryId, setFilterCategoryId] = useState('');
     fetchCategories();
   }, []);
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
-      const res = await axios.get('http://localhost:8080/api/products');
+      const url = filterCategoryId && filterCategoryId !== 'none'
+        ? `http://localhost:8080/api/products/by-category/${filterCategoryId}`
+        : 'http://localhost:8080/api/products';
+
+      const res = await axios.get(url);
       setProducts(res.data);
     } catch (err) {
-      console.error('Neizdevās ielādēt produktus', err);
+      console.error('❌ Neizdevās ielādēt produktus', err);
     }
-  };
+  }, [filterCategoryId]);
 
   const fetchCategories = async () => {
     try {
       const res = await axios.get('http://localhost:8080/api/categories');
       setCategories(res.data);
     } catch (err) {
-      console.error('Neizdevās ielādēt kategorijas', err);
+      console.error('❌ Neizdevās ielādēt kategorijas', err);
     }
   };
 
-const handleCategoryFilterChange = async (categoryId) => {
-  setFilterCategoryId(categoryId);
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
-  if (!categoryId) {
-    fetchProducts(); // rāda visus
-  } else {
-    try {
-      const res = await axios.get(`http://localhost:8080/api/products/by-category/${categoryId}`);
-      setProducts(res.data);
-    } catch (err) {
-      console.error('Neizdevās ielādēt filtrētos produktus', err);
-    }
-  }
+  const handleCategoryFilterChange = (categoryId) => {
+  setFilterCategoryId(categoryId);
 };
 
   const handleCategoryChange = (productId, categoryId) => {
     setSelected((prev) => ({ ...prev, [productId]: categoryId }));
   };
 
-  const saveCategory = async (productId) => {
-    if (!selected[productId]) return;
-    setSaving((prev) => ({ ...prev, [productId]: true }));
-
-    try {
-      await axios.put(`http://localhost:8080/api/products/${productId}/category`, {
-        categoryId: selected[productId],
-      });
-      fetchProducts(); // Refresh data
-    } catch (err) {
-      console.error('Neizdevās saglabāt kategoriju:', err);
-    } finally {
-      setSaving((prev) => ({ ...prev, [productId]: false }));
-    }
-  };
-
   const saveAllCategories = async () => {
     const changes = Object.entries(selected)
-      .filter(([_, categoryId]) => categoryId) // tikai izvēlētie
+      .filter(([_, categoryId]) => categoryId)
       .map(([productId, categoryId]) => ({
         productId: parseInt(productId),
         categoryId: parseInt(categoryId),
       }));
 
-    if (changes.length === 0) return;
+    if (!changes.length) return;
 
     try {
       await axios.put('http://localhost:8080/api/products/update-categories', changes);
-      fetchProducts(); // atjauno sarakstu
+      await fetchProducts();
       setSelected({});
     } catch (err) {
-      console.error('Neizdevās saglabāt visas kategorijas:', err);
+      console.error('❌ Neizdevās saglabāt visas kategorijas:', err);
     }
   };
 
@@ -99,9 +80,7 @@ const handleCategoryFilterChange = async (categoryId) => {
            <option value="">Visas kategorijas</option>
            <option value="none">-- Bez kategorijas --</option>
            {categories.map((cat) => (
-             <option key={cat.id} value={cat.id}>
-               {cat.name}
-             </option>
+            <option key={cat.id} value={cat.id}>{cat.name}</option>
            ))}
          </select>
        </div>
@@ -116,7 +95,7 @@ const handleCategoryFilterChange = async (categoryId) => {
                  <th className="py-3 px-4">Nosaukums</th>
                  <th className="py-3 px-4">Cena (€)</th>
                  <th className="py-3 px-4">Kategorija</th>
-                 <th className="py-3 px-4">Darbība</th>
+                <th className="py-3 px-4">Statuss</th>
                </tr>
              </thead>
              <tbody>

@@ -13,7 +13,6 @@ function CategoryStats() {
   const [categoryProducts, setCategoryProducts] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
 
-
   useEffect(() => {
     axios.get('http://localhost:8080/api/categories')
       .then(res => {
@@ -26,10 +25,11 @@ function CategoryStats() {
   }, []);
 
   const toggleCategory = (category) => {
-    const updated = selected.includes(category)
-      ? selected.filter((c) => c !== category)
-      : [...selected, category];
-    setSelected(updated);
+    setSelected((prev) =>
+      prev.includes(category)
+        ? prev.filter(c => c !== category)
+        : [...prev, category]
+    );
   };
 
 const fetchStatsFor = (selectedCategories) => {
@@ -40,9 +40,7 @@ const fetchStatsFor = (selectedCategories) => {
   }
 
   axios.post(url, JSON.stringify(selectedCategories), {
-    headers: {
-      'Content-Type': 'application/json'
-    }
+      headers: { 'Content-Type': 'application/json' },
   })
     .then(res => {
       setFilteredStats(res.data.categories);
@@ -63,10 +61,9 @@ const fetchProductsByCategory = async (category) => {
 
   try {
     const res = await axios.get(url);
-    const all = res.data;
-    const selected = all.find(item => item.category === category);
+      const found = res.data.find(item => item.category === category);
     setSelectedCategory(category);
-    setCategoryProducts(selected ? selected.products : []);
+      setCategoryProducts(found ? found.products : []);
   } catch (err) {
     console.error('Neizdevās ielādēt produktus:', err);
     setSelectedCategory('');
@@ -74,14 +71,18 @@ const fetchProductsByCategory = async (category) => {
   }
 };
 
-
-  const selectAll = () => {
-    const allNames = categories.map(cat => cat.name);
-    setSelected(allNames);
+  const handleYearChange = (year) => {
+    const newStart = `${year}-${startDate.slice(5) || '01-01'}`;
+    const newEnd = `${year}-${endDate.slice(5) || '12-31'}`;
+    setStartDate(newStart);
+    setEndDate(newEnd);
   };
 
-  const clearAll = () => {
-    setSelected([]);
+  const handleMonthChange = (month) => {
+    const year = startDate.slice(0, 4) || '2025';
+    const daysInMonth = new Date(year, month, 0).getDate();
+    setStartDate(`${year}-${month}-01`);
+    setEndDate(`${year}-${month}-${daysInMonth}`);
   };
 
   return (
@@ -144,17 +145,13 @@ const fetchProductsByCategory = async (category) => {
       Parādīt statistiku
     </button>
   </div>
+
   {!allTime && (
     <div className="flex gap-2 items-center">
       <label className="text-sm font-medium">Gads:</label>
       <select
         value={startDate.slice(0, 4)}
-        onChange={(e) => {
-          const newStart = `${e.target.value}-${startDate.slice(5) || '01-01'}`;
-          const newEnd = `${e.target.value}-${endDate.slice(5) || '12-31'}`;
-          setStartDate(newStart);
-          setEndDate(newEnd);
-        }}
+              onChange={(e) => handleYearChange(e.target.value)}
         className="border p-1 rounded"
       >
         {[2023, 2024, 2025].map((y) => (
@@ -165,13 +162,7 @@ const fetchProductsByCategory = async (category) => {
       <label className="text-sm font-medium">Mēnesis:</label>
       <select
         value={startDate.slice(5, 7)}
-        onChange={(e) => {
-          const year = startDate.slice(0, 4) || '2025';
-          const month = e.target.value;
-          const daysInMonth = new Date(year, month, 0).getDate();
-          setStartDate(`${year}-${month}-01`);
-          setEndDate(`${year}-${month}-${daysInMonth}`);
-        }}
+              onChange={(e) => handleMonthChange(e.target.value)}
         className="border p-1 rounded"
       >
         {[...Array(12).keys()].map((m) => {
@@ -202,7 +193,7 @@ const fetchProductsByCategory = async (category) => {
                   >
                     {item.category}
                   </td>
-                  <td className="py-2 px-4">{Number(item.total).toFixed(2)} €</td>
+                  <td className="py-2 px-4">{item.total.toFixed(2)} €</td>
                 </tr>
               ))}
             </tbody>
@@ -210,8 +201,10 @@ const fetchProductsByCategory = async (category) => {
 
           {/* Kopējā summa */}
           <div className="mt-4 text-right text-green-700 font-bold text-lg">
-            💰 Kopā: {Number(total).toFixed(2)} €
+            💰 Kopā: {total.toFixed(2)} €
           </div>
+
+          {/* Produkti izvēlētajā kategorijā */}
           {selectedCategory && (
             <div className="mt-6">
               <h3 className="text-lg font-semibold mb-2 text-gray-800">
@@ -226,7 +219,7 @@ const fetchProductsByCategory = async (category) => {
                   <th className="py-2 px-4 text-left">Nosaukums</th>
                   <th className="py-2 px-4 text-left">Cena (€)</th>
                   <th className="py-2 px-4 text-left">Daudzums</th>
-                  <th className="py-2 px-4 text-left">Atlaide (€)</th> {/* ✅ Jauna kolonna */}
+                      <th className="py-2 px-4 text-left">Atlaide (€)</th>
                   <th className="py-2 px-4 text-left">Kopā (€)</th>
                 </tr>
               </thead>
@@ -236,7 +229,7 @@ const fetchProductsByCategory = async (category) => {
                     <td className="py-1 px-4">{prod.name}</td>
                     <td className="py-1 px-4">{prod.unitPrice.toFixed(2)}</td>
                     <td className="py-1 px-4">{prod.quantity}</td>
-                    <td className="py-1 px-4">{prod.discountAmount ? `-${prod.discountAmount.toFixed(2)}` : '—'}</td> {/* ✅ Atlaide */}
+                        <td className="py-1 px-4">{prod.discountAmount ? `-${prod.discountAmount.toFixed(2)}` : '—'}</td>
                     <td className="py-1 px-4">{prod.total.toFixed(2)}</td>
                   </tr>
                 ))}
@@ -245,7 +238,6 @@ const fetchProductsByCategory = async (category) => {
               )}
             </div>
           )}
-
         </>
       )}
 

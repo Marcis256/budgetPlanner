@@ -1,15 +1,17 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
-function Header() {
+const Header = () => {
   const location = useLocation();
 
-  const linkClasses = (path) =>
-    `px-4 py-2 rounded-md transition-all duration-200 ${
-      location.pathname === path
-        ? 'bg-white text-blue-700 font-semibold shadow-sm'
-        : 'text-white hover:bg-blue-600'
-    }`;
+  const isActive = (path) => location.pathname === path;
+
+  const navLinks = [
+    { to: '/categories', label: '📂 Kategorijas' },
+    { to: '/receipts', label: '📄 Visi čeki' },
+    { to: '/products', label: '🛒 Produkti' },
+    { to: '/add', label: '📥 Pievienot' }
+  ];
 
   return (
     <header className="bg-white shadow">
@@ -18,14 +20,23 @@ function Header() {
           💰 Budžeta Lietotne
         </h1>
         <nav className="flex gap-4 text-gray-700 font-medium">
-          <Link to="/categories" className="hover:text-blue-600 transition">📂 Kategorijas</Link>
-          <Link to="/receipts" className="hover:text-blue-600 transition">📄 Visi čeki</Link>
-          <Link to="/products" className="hover:text-blue-600 transition">🛒 Produkti</Link>
-          <Link to="/add" className="hover:text-blue-600 transition">📥 Pievienot čeku/kategoriju</Link>
+          {navLinks.map(({ to, label }) => (
+            <Link
+              key={to}
+              to={to}
+              className={`transition px-3 py-2 rounded-md ${
+                isActive(to)
+                  ? 'bg-blue-100 text-blue-700 font-semibold'
+                  : 'hover:bg-blue-50'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
         </nav>
       </div>
     </header>
   );
-}
+};
 
 export default Header;

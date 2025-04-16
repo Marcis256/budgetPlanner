@@ -10,11 +10,22 @@ function AddReceipt() {
   const [categories, setCategories] = useState([]);
   const [importMessage, setImportMessage] = useState('');
 
-  const navigate = useNavigate(); // React Router hook
+  const navigate = useNavigate();
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+  const fetchCategories = async () => {
+    try {
+      const res = await axios.get('http://localhost:8080/api/categories');
+      setCategories(res.data);
+    } catch (err) {
+      console.error('❌ Neizdevās ielādēt kategorijas:', err);
+    }
   };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const handleFileChange = (e) => setFile(e.target.files[0]);
 
   const handleUpload = async () => {
     if (!file) return;
@@ -28,11 +39,8 @@ function AddReceipt() {
       setMessage('✅ Čeks augšupielādēts veiksmīgi!');
       setFile(null);
     } catch (error) {
-          if (error.response && error.response.data) {
-            setMessage(`❌ Kļūda: ${error.response.data.message || JSON.stringify(error.response.data)}`);
-          } else {
-            setMessage('❌ Nezināma kļūda saglabājot čeku.');
-          }
+      const errorMsg = error.response?.data?.message || JSON.stringify(error.response?.data || '❌ Nezināma kļūda.');
+      setMessage(`❌ Kļūda: ${errorMsg}`);
           console.error(error);
     }
   };
@@ -56,8 +64,8 @@ function AddReceipt() {
       setCategoryName('');
       fetchCategories();
     } catch (err) {
-      setCategoryMessage('❌ Neizdevās pievienot kategoriju.');
       console.error(err);
+      setCategoryMessage('❌ Neizdevās pievienot kategoriju.');
     }
   };
 
@@ -73,9 +81,6 @@ const handleUpdateCategory = async (id, name) => {
 };
 
 const handleDeleteCategory = async (id) => {
-
-  console.log('Dzēšanas mēģinājums ar ID:', id);
-
   try {
     await axios.delete(`http://localhost:8080/api/categories/${id}`);
     setCategoryMessage('🗑️ Kategorija dzēsta!');
@@ -86,21 +91,6 @@ const handleDeleteCategory = async (id) => {
     console.error(err);
   }
 };
-
-
-  const fetchCategories = async () => {
-    try {
-      const res = await axios.get('http://localhost:8080/api/categories');
-      setCategories(res.data);
-    } catch (err) {
-      console.error('Neizdevās ielādēt kategorijas:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
 
   return (
     <div className="min-h-screen bg-gradient-to-tr from-blue-50 via-white to-green-50 p-6">

@@ -67,8 +67,14 @@ public class ImageParserUtil {
                     double quantity = Double.parseDouble(parts[2].replace(",", "."));
                     double total = unitPrice * quantity;
 
-                    Product product = new Product(name, unitPrice, quantity);
-                    product.setTotalPrice(total);
+                    Product product = Product.builder()
+                            .name(name)
+                            .unitPrice(unitPrice)
+                            .quantity(quantity)
+                            .totalPrice(0.00)
+                            .discountAmount(null)
+                            .build();
+
                     products.add(product);
                 } catch (Exception e) {
                     System.err.println("❌ Neizdevās parsēt produktu no: " + line);
