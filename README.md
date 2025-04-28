@@ -69,7 +69,16 @@ budzets/
 ---
 
 ## 🖼️ Screenshots
-![example](./screenshots/receipt-example.jpg)
+![image](https://github.com/user-attachments/assets/954ced68-4d03-4c97-ac88-748b214f55e4)
+
+![image](https://github.com/user-attachments/assets/612a5557-be9d-4863-ab8f-7cb3fb5eed44)
+
+![image](https://github.com/user-attachments/assets/8664c622-70ea-45f4-b408-b65babfde364)
+
+![image](https://github.com/user-attachments/assets/e7c7bb40-7ec8-45f8-89ec-87c452c1f3ab)
+
+![Uploading image.png…]()
+
 
 ---
 
@@ -80,6 +89,7 @@ budzets/
 - 🧐 Automatic product category recognition
 - Improved front-end design
 - Expanded functionality
+- Fix bugs
 
 ---
 
