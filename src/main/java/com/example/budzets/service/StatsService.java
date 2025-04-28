@@ -17,123 +17,79 @@ import java.util.stream.Collectors;
 public class StatsService {
 
     private final CheckProductRepository checkProductRepository;
-    private final ReceiptRepository receiptRepository;
+    private final ReceiptService receiptService;
 
-    public StatsService(CheckProductRepository checkProductRepository, ReceiptRepository receiptRepository) {
+    public StatsService(CheckProductRepository checkProductRepository, ReceiptService receiptService) {
         this.checkProductRepository = checkProductRepository;
-        this.receiptRepository = receiptRepository;
+        this.receiptService = receiptService;
     }
 
     public List<CategoryProductsDTO> getProductsGroupedByCategoryAndDateRange(LocalDateTime start, LocalDateTime end) {
-        List<CheckProductEntity> all = receiptRepository.findByDateBetween(start, end, Sort.by(Sort.Direction.DESC, "date"))
-                .stream()
-                .flatMap(r -> r.getProducts().stream())
-                .collect(Collectors.toList());
-
-        // Grupējam pēc kategorijas
-        Map<String, List<CheckProductEntity>> byCategory = all.stream()
-                .filter(p -> p.getProduct().getCategory() != null)
-                .collect(Collectors.groupingBy(p -> p.getProduct().getCategory().getName()));
-
-        List<CategoryProductsDTO> result = new ArrayList<>();
-
-        for (String category : byCategory.keySet()) {
-            List<CheckProductEntity> products = byCategory.get(category);
-
-            // Grupējam pēc nosaukuma + cenas
-            Map<String, ProductWithTotalDTO> grouped = new HashMap<>();
-
-            for (CheckProductEntity p : products) {
-                String key = p.getProduct().getName() + "_" + p.getProduct().getUnitPrice();
-
-                grouped.merge(key,
-                        new ProductWithTotalDTO(
-                                p.getProduct().getName(),
-                                p.getProduct().getUnitPrice(),
-                                p.getQuantity(),
-                                p.getTotalPrice(),
-                                p.getDiscountAmount() != null ? p.getDiscountAmount() : 0.0
-                        ),
-                        (existing, next) -> new ProductWithTotalDTO(
-                                existing.getName(),
-                                existing.getUnitPrice(),
-                                existing.getQuantity() + next.getQuantity(),
-                                existing.getTotal() + next.getTotal(),
-                                existing.getDiscountAmount() + next.getDiscountAmount() // ✅ summējam atlaides
-                        )
-                );
-            }
-
-            result.add(new CategoryProductsDTO(category, new ArrayList<>(grouped.values())));
-        }
-
-        return result;
-    }
-
-
-    public List<Map<String, Object>> getTotalSpentPerSelectedCategories(List<String> categories, LocalDateTime start, LocalDateTime end) {
-        if (start == null || end == null) {
-            return checkProductRepository.getTotalSpentPerSelectedCategoriesWithoutDate(categories);
-        }
-        return checkProductRepository.getTotalSpentPerSelectedCategories(categories, start, end);
-    }
-
-    public Double getTotalForSelectedCategories(List<String> categories, LocalDateTime start, LocalDateTime end) {
-        if (start == null || end == null) {
-            return checkProductRepository.getTotalForSelectedCategoriesWithoutDate(categories);
-        }
-        return checkProductRepository.getTotalForSelectedCategories(categories, start, end);
-    }
-
-    public List<ProductWithTotalDTO> getProductsByCategoryAndDate(String category, LocalDateTime start, LocalDateTime end) {
-        List<CheckProductEntity> products = checkProductRepository.findByCategoryAndDate(category, start, end);
-
-        return products.stream()
-                .map(p -> new ProductWithTotalDTO(
-                        p.getProduct().getName(),
-                        p.getProduct().getUnitPrice(),
-                        p.getQuantity(),
-                        p.getTotalPrice(),
-                        p.getDiscountAmount() != null ? p.getDiscountAmount() : 0.0
-                ))
-                .toList();
+        List<CheckProductEntity> products = receiptService.getCheckProductsWithCategoryByDateRange(start, end);
+        return groupProductsByCategory(products);
     }
 
     public List<CategoryProductsDTO> getProductsGroupedByCategoryAllTime() {
-        List<CheckProductEntity> all = checkProductRepository.findAll();
-
-        Map<String, Map<String, ProductWithTotalDTO>> grouped = new HashMap<>();
-
-        for (CheckProductEntity cp : all) {
-            ProductEntity p = cp.getProduct();
-            String category = p.getCategory() != null ? p.getCategory().getName() : "Bez kategorijas";
-
-            grouped.putIfAbsent(category, new HashMap<>());
-
-            Map<String, ProductWithTotalDTO> productMap = grouped.get(category);
-            String key = p.getName() + "_" + p.getUnitPrice();
-
-            productMap.putIfAbsent(key, new ProductWithTotalDTO(
-                    p.getName(),
-                    p.getUnitPrice(),
-                    0,
-                    0.0,
-                    0.0
-            ));
-
-            ProductWithTotalDTO dto = productMap.get(key);
-            dto.setQuantity(dto.getQuantity() + cp.getQuantity());
-            dto.setTotal(dto.getTotal() + cp.getTotalPrice());
-            dto.setDiscountAmount(dto.getDiscountAmount() + (cp.getDiscountAmount() != null ? cp.getDiscountAmount() : 0.0));
-        }
-
-        return grouped.entrySet().stream()
-                .map(entry -> new CategoryProductsDTO(
-                        entry.getKey(),
-                        new ArrayList<>(entry.getValue().values())
-                ))
-                .toList();
+        List<CheckProductEntity> products = checkProductRepository.findAll();
+        return groupProductsByCategory(products);
     }
 
+    public List<Map<String, Object>> getTotalSpentPerSelectedCategories(List<String> categories, LocalDateTime start, LocalDateTime end) {
+        return (start == null || end == null)
+                ? checkProductRepository.getTotalSpentPerSelectedCategoriesWithoutDate(categories)
+                : checkProductRepository.getTotalSpentPerSelectedCategories(categories, start, end);
+    }
 
+    public Double getTotalForSelectedCategories(List<String> categories, LocalDateTime start, LocalDateTime end) {
+        return (start == null || end == null)
+                ? checkProductRepository.getTotalForSelectedCategoriesWithoutDate(categories)
+                : checkProductRepository.getTotalForSelectedCategories(categories, start, end);
+    }
+
+    public List<ProductWithTotalDTO> getProductsByCategoryAndDate(String category, LocalDateTime start, LocalDateTime end) {
+        return checkProductRepository.findByCategoryAndDate(category, start, end)
+                .stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
+    // === 👇 Palīgmetodes 👇 ===
+
+    private List<CategoryProductsDTO> groupProductsByCategory(List<CheckProductEntity> products) {
+        Map<String, Map<String, ProductWithTotalDTO>> groupedByCategory = new HashMap<>();
+
+        for (CheckProductEntity cp : products) {
+            ProductEntity p = cp.getProduct();
+            String category = (p.getCategory() != null) ? p.getCategory().getName() : "Bez kategorijas";
+            String key = p.getName() + "_" + p.getUnitPrice();
+
+            groupedByCategory
+                    .computeIfAbsent(category, c -> new HashMap<>())
+                    .merge(key, toDTO(cp), this::mergeProductData);
+        }
+
+        return groupedByCategory.entrySet().stream()
+                .map(entry -> new CategoryProductsDTO(entry.getKey(), new ArrayList<>(entry.getValue().values())))
+                .collect(Collectors.toList());
+        }
+
+    private ProductWithTotalDTO toDTO(CheckProductEntity cp) {
+        return new ProductWithTotalDTO(
+                cp.getProduct().getName(),
+                cp.getProduct().getUnitPrice(),
+                cp.getQuantity(),
+                cp.getTotalPrice(),
+                cp.getDiscountAmount() != null ? cp.getDiscountAmount() : 0.0
+        );
+    }
+
+    private ProductWithTotalDTO mergeProductData(ProductWithTotalDTO a, ProductWithTotalDTO b) {
+        return new ProductWithTotalDTO(
+                a.getName(),
+                a.getUnitPrice(),
+                a.getQuantity() + b.getQuantity(),
+                a.getTotal() + b.getTotal(),
+                a.getDiscountAmount() + b.getDiscountAmount()
+        );
+    }
 }

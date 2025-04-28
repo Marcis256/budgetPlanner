@@ -1,9 +1,9 @@
 package com.example.budzets.controller;
 
-import com.example.budzets.repository.CheckProductRepository;
 import com.example.budzets.dto.CategoryProductsDTO;
-import com.example.budzets.service.ReceiptService;
+import com.example.budzets.repository.CheckProductRepository;
 import com.example.budzets.service.StatsService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,15 +14,11 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/stats")
 @CrossOrigin(origins = "http://localhost:3000")
+@RequiredArgsConstructor
 public class StatsController {
 
     private final CheckProductRepository checkProductRepository;
     private final StatsService statsService;
-
-    public StatsController(CheckProductRepository checkProductRepository, StatsService statsService) {
-        this.checkProductRepository = checkProductRepository;
-        this.statsService = statsService;
-    }
 
     @GetMapping("/categories")
     public List<Map<String, Object>> getTotalPerCategory() {
@@ -49,10 +45,8 @@ public class StatsController {
             @RequestParam(value = "end", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end
     ) {
-        if (start != null && end != null) {
-            return statsService.getProductsGroupedByCategoryAndDateRange(start, end);
-        } else {
-            return statsService.getProductsGroupedByCategoryAllTime();
-        }
+        return (start != null && end != null)
+                ? statsService.getProductsGroupedByCategoryAndDateRange(start, end)
+                : statsService.getProductsGroupedByCategoryAllTime();
     }
 }

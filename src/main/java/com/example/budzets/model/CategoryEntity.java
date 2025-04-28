@@ -1,27 +1,27 @@
 package com.example.budzets.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
-import java.util.Set;
+import lombok.*;
+
+import java.util.List;
 
 @Entity
 @Table(name = "categories")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class CategoryEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String name; // piem. "Pārtika", "Dzērieni", "Sadzīve" utt.
+    private String name;
 
-    @OneToMany(mappedBy = "category")
-    private Set<ProductEntity> products;
-
-    // Getters and Setters
-    public Long getId() { return id; }
-    public String getName() { return name; }
-    public Set<ProductEntity> getProducts() { return products; }
-
-    public void setId(Long id) { this.id = id; }
-    public void setName(String name) { this.name = name; }
-    public void setProducts(Set<ProductEntity> products) { this.products = products; }
+    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnoreProperties("category")
+    private List<ProductEntity> products;
 }

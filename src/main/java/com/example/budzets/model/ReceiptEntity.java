@@ -1,16 +1,21 @@
 package com.example.budzets.model;
 
-import com.fasterxml.jackson.annotation.JsonManagedReference;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
-import lombok.ToString;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
 @Table(name = "receipts")
-@ToString
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ReceiptEntity {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -22,46 +27,6 @@ public class ReceiptEntity {
     private double total;
 
     @OneToMany(mappedBy = "receipt", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnoreProperties("receipt")
     private List<CheckProductEntity> products;
-
-    // Getters and setters
-    public Long getId() {
-        return id;
-    }
-
-    public String getReceiptNumber() {
-        return receiptNumber;
-    }
-
-    public LocalDateTime getDate() {
-        return date;
-    }
-
-    public double getTotal() {
-        return total;
-    }
-
-    public List<CheckProductEntity> getProducts() {
-        return products;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public void setReceiptNumber(String receiptNumber) {
-        this.receiptNumber = receiptNumber;
-    }
-
-    public void setDate(LocalDateTime date) {
-        this.date = date;
-    }
-
-    public void setTotal(double total) {
-        this.total = total;
-    }
-
-    public void setProducts(List<CheckProductEntity> products) {
-        this.products = products;
-    }
 }

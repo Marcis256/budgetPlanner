@@ -1,0 +1,24 @@
+# Node.js un React
+react-frontend/node_modules
+react-frontend/.next
+react-frontend/build
+react-frontend/.env
+
+# Java/Maven
+target
+*.jar
+*.war
+*.log
+
+# Sistēmas faili
+.DS_Store
+.idea
+.vscode
+
+# Git
+.git
+.gitignore
+
+# Testa un konfigurācijas faili
+.env
+*.iml

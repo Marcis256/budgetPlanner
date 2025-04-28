@@ -1,137 +1,57 @@
 package com.example.budzets.service;
 
-import com.example.budzets.repository.ProductRepository;
-import com.example.budzets.repository.ReceiptRepository;
+import com.example.budzets.dto.CheckProductDTO;
+import com.example.budzets.dto.ReceiptDTO;
 import com.example.budzets.model.*;
-import com.example.budzets.util.PDFParserUtil;
-import com.example.budzets.util.ImageParserUtil;
+import com.example.budzets.repository.ReceiptRepository;
+import com.example.budzets.parser.ImageParserUtil;
+import com.example.budzets.parser.PDFParserUtil;
 import net.sourceforge.tess4j.TesseractException;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import static com.example.budzets.util.RoundUtil.*;
 
 import java.io.File;
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 public class ReceiptService {
+
     private final PDFParserUtil pdfParser;
     private final ImageParserUtil imageParser;
-    private final ProductRepository productRepository;
     private final ReceiptRepository receiptRepository;
+    private final ProductService productService;
 
-    public ReceiptService(PDFParserUtil pdfParser,
-                          ImageParserUtil imageParser,
-                          ProductRepository productRepository,
-                          ReceiptRepository receiptRepository) {
+    public ReceiptService(PDFParserUtil pdfParser, ImageParserUtil imageParser, ReceiptRepository receiptRepository, ProductService productService) {
         this.pdfParser = pdfParser;
         this.imageParser = imageParser;
-        this.productRepository = productRepository;
         this.receiptRepository = receiptRepository;
+        this.productService = productService;
     }
 
-    public ReceiptEntity handle(File file) throws IOException, TesseractException {
-        String fileName = file.getName().toLowerCase();
+    public ReceiptEntity parseAndSaveReceiptFromFile(File file) throws IOException, TesseractException {
         Receipt parsed;
 
-        if (fileName.endsWith(".pdf")) {
+        if (file.getName().toLowerCase().endsWith(".pdf")) {
             parsed = pdfParser.parseReceipt(file);
-        } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") || fileName.endsWith(".png")) {
+        } else if (file.getName().matches("(?i).*\\.(jpg|jpeg|png)$")) {
             parsed = imageParser.parseImage(file);
         } else {
-            throw new IllegalArgumentException("Nepieļauts faila formāts: " + fileName);
+            throw new IllegalArgumentException("Nepieļauts faila formāts: " + file.getName());
         }
 
         return saveParsedReceipt(parsed);
-    }
-
-    private ReceiptEntity saveParsedReceipt(Receipt parsed) {
-        // ✅ Pārbaude uz dublikātu
-        Optional<ReceiptEntity> existing = receiptRepository.findByReceiptNumber(parsed.getReceiptNumber());
-        if (existing.isPresent()) {
-            throw new IllegalArgumentException("Čeks ar numuru " + parsed.getReceiptNumber() + " jau eksistē!");
-        }
-
-        ReceiptEntity receiptEntity = new ReceiptEntity();
-        receiptEntity.setReceiptNumber(parsed.getReceiptNumber());
-        receiptEntity.setDate(parsed.getDate());
-        receiptEntity.setTotal(round(parsed.getTotal()));
-
-        List<CheckProductEntity> checkProducts = new ArrayList<>();
-
-        for (Product p : parsed.getProducts()) {
-            ProductEntity productEntity = productRepository
-                    .findByNameAndUnitPrice(p.getName(), p.getUnitPrice())
-                    .orElseGet(() -> {
-                        ProductEntity newProduct = new ProductEntity();
-                        newProduct.setName(p.getName());
-                        newProduct.setUnitPrice(round(p.getUnitPrice()));
-                        return productRepository.save(newProduct);
-                    });
-
-            CheckProductEntity checkProduct = new CheckProductEntity();
-            checkProduct.setProduct(productEntity);
-            checkProduct.setQuantity(roundQuantity(p.getQuantity()));
-            checkProduct.setTotalPrice(round(p.getTotalPrice()));
-            checkProduct.setDiscountAmount(p.getDiscountAmount());
-            checkProduct.setReceipt(receiptEntity);
-
-            checkProducts.add(checkProduct);
-        }
-
-        receiptEntity.setProducts(checkProducts);
-        return receiptRepository.save(receiptEntity);
-    }
-
-    public ReceiptEntity handleManual(Receipt manual) {
-        ReceiptEntity receiptEntity = new ReceiptEntity();
-        receiptEntity.setReceiptNumber(manual.getReceiptNumber());
-        receiptEntity.setDate(manual.getDate());
-        receiptEntity.setTotal(manual.getTotal());
-
-        List<CheckProductEntity> checkProducts = new ArrayList<>();
-
-        for (Product p : manual.getProducts()) {
-            ProductEntity productEntity;
-
-            if (p.getId() != null) {
-                productEntity = productRepository.findById(p.getId())
-                        .orElseThrow(() -> new IllegalArgumentException("Produkta ID nav atrasts DB: " + p.getId()));
-            } else {
-                productEntity = new ProductEntity();
-                productEntity.setName(p.getName());
-                productEntity.setUnitPrice(p.getUnitPrice());
-                productEntity = productRepository.save(productEntity);
-            }
-
-            CheckProductEntity checkProduct = new CheckProductEntity();
-            checkProduct.setProduct(productEntity);
-            checkProduct.setQuantity(p.getQuantity());
-            checkProduct.setTotalPrice(p.getTotalPrice());
-            checkProduct.setDiscountAmount(p.getDiscountAmount());
-            checkProduct.setReceipt(receiptEntity);
-
-            checkProducts.add(checkProduct);
-        }
-
-        receiptEntity.setProducts(checkProducts);
-        return receiptRepository.save(receiptEntity);
-    }
-
-    public List<ReceiptEntity> getAllReceipts() {
-        return receiptRepository.findAll();
     }
 
     public Double getTotalSpent() {
         return receiptRepository.findTotalSpent();
     }
 
-    public List<ReceiptEntity> getByDateRange(LocalDateTime start, LocalDateTime end) {
+    public List<ReceiptEntity> getByDateRangeSorted(LocalDateTime start, LocalDateTime end) {
         return receiptRepository.findByDateBetween(start, end, Sort.by(Sort.Direction.DESC, "date"));
     }
 
@@ -139,11 +59,126 @@ public class ReceiptService {
         return Optional.ofNullable(receiptRepository.findTotalSpentBetween(start, end)).orElse(0.0);
     }
 
-    private double round(double value) {
-        return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).doubleValue();
+    public ReceiptEntity createManualReceiptFromDTO(ReceiptDTO dto) {
+        ReceiptEntity receipt = buildReceipt(dto.getReceiptNumber(), dto.getDate(), dto.getTotal(), dto.getProducts(), true);
+        return receiptRepository.save(receipt);
     }
 
-    private double roundQuantity(double value) {
-        return BigDecimal.valueOf(value).setScale(3, RoundingMode.HALF_UP).doubleValue();
+    public ReceiptEntity updateReceiptFromDTO(Long id, ReceiptDTO dto) {
+        ReceiptEntity existing = receiptRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Čeks nav atrasts: ID = " + id));
+
+        existing.setReceiptNumber(dto.getReceiptNumber());
+        existing.setDate(dto.getDate());
+        existing.setTotal(round(dto.getTotal()));
+
+        List<CheckProductEntity> updatedProducts = dto.getProducts().stream().map(cp -> {
+            ProductEntity product = cp.getProductId() != null
+                    ? productService.findByIdOrThrow(cp.getProductId())
+                    : productService.createNewProduct(cp.getName(), cp.getUnitPrice());
+
+            return CheckProductEntity.builder()
+                    .product(product)
+                    .quantity(cp.getQuantity())
+                    .totalPrice(cp.getTotalPrice())
+                    .discountAmount(cp.getDiscountAmount())
+                    .receipt(existing)
+                    .build();
+        }).toList();
+
+        existing.getProducts().clear();
+        existing.setProducts(updatedProducts);
+
+        return receiptRepository.save(existing);
+    }
+
+    public boolean deleteReceiptById(Long id) {
+        if (!receiptRepository.existsById(id)) {
+            return false;
+        }
+        receiptRepository.deleteById(id);
+        return true;
+    }
+
+    public ReceiptEntity handleUploadedFile(MultipartFile multipartFile) throws IOException, TesseractException {
+        File tempFile = File.createTempFile("receipt-", getFileExtension(multipartFile.getOriginalFilename()));
+        multipartFile.transferTo(tempFile);
+        return parseAndSaveReceiptFromFile(tempFile);
+    }
+
+    private String getFileExtension(String filename) {
+        return filename.substring(filename.lastIndexOf("."));
+    }
+
+    public List<ReceiptEntity> getAllSortedByDateDesc() {
+        return receiptRepository.findAll(Sort.by(Sort.Direction.DESC, "date"));
+    }
+
+    public List<CheckProductEntity> getCheckProductsWithCategoryByDateRange(LocalDateTime start, LocalDateTime end) {
+        return getByDateRangeSorted(start, end).stream()
+                    .flatMap(receipt -> receipt.getProducts().stream())
+                    .filter(cp -> cp.getProduct().getCategory() != null)
+                    .toList();
+    }
+
+
+
+
+
+    private ReceiptEntity createReceiptEntity(Receipt parsed) {
+        return buildReceipt(parsed.getReceiptNumber(), parsed.getDate(), parsed.getTotal(), parsed.getProducts(), false);
+    }
+
+    private ReceiptEntity buildReceipt(String receiptNumber, LocalDateTime date, double total, List<? extends Object> rawProducts, boolean isDto) {
+        ReceiptEntity receipt = new ReceiptEntity();
+        receipt.setReceiptNumber(receiptNumber);
+        receipt.setDate(date);
+        receipt.setTotal(round(total));
+
+        List<CheckProductEntity> checkProducts;
+
+        if (isDto) {
+            checkProducts = ((List<CheckProductDTO>) rawProducts).stream().map(cp -> {
+                ProductEntity product = (cp.getProductId() != null)
+                        ? productService.findByIdOrThrow(cp.getProductId())
+                        : productService.createNewProduct(cp.getName(), cp.getUnitPrice());
+
+                return CheckProductEntity.builder()
+                        .product(product)
+                        .quantity(cp.getQuantity())
+                        .totalPrice(cp.getTotalPrice())
+                        .discountAmount(cp.getDiscountAmount())
+                        .receipt(receipt)
+                        .build();
+            }).toList();
+        } else {
+            checkProducts = ((List<Product>) rawProducts).stream().map(p -> {
+                return buildCheckProduct(p, receipt);
+            }).toList();
+        }
+
+        receipt.setProducts(checkProducts);
+        return receipt;
+    }
+
+    private ReceiptEntity saveParsedReceipt(Receipt parsed) {
+        if (receiptRepository.findByReceiptNumber(parsed.getReceiptNumber()).isPresent()) {
+            throw new IllegalArgumentException("Čeks ar numuru " + parsed.getReceiptNumber() + " jau eksistē!");
+        }
+        return receiptRepository.save(createReceiptEntity(parsed));
+    }
+
+    private CheckProductEntity buildCheckProduct(Product product, ReceiptEntity receiptEntity) {
+        ProductEntity productEntity = (product.getId() != null)
+                ? productService.findByIdOrThrow(product.getId())
+                : productService.findOrCreateProductByNameAndPrice(product.getName(), product.getUnitPrice());
+
+        return CheckProductEntity.builder()
+                .product(productEntity)
+                .quantity(roundQuantity(product.getQuantity()))
+                .totalPrice(round(product.getTotalPrice()))
+                .discountAmount(product.getDiscountAmount())
+                .receipt(receiptEntity)
+                .build();
     }
 }
