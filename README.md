@@ -75,10 +75,9 @@ budzets/
 
 ![image](https://github.com/user-attachments/assets/8664c622-70ea-45f4-b408-b65babfde364)
 
+![image](https://github.com/user-attachments/assets/c04e813e-0413-4a50-9784-1e2768e6bb02)
+
 ![image](https://github.com/user-attachments/assets/e7c7bb40-7ec8-45f8-89ec-87c452c1f3ab)
-
-![Uploading image.png…]()
-
 
 ---
 
